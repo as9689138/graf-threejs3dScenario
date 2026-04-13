@@ -40,8 +40,8 @@
 			let texture;
 			const textureLoader = new THREE.TextureLoader();
 
-			const timer = new THREE.Timer();
-			timer.connect( document );
+			// Clock mide tiempo entre frames
+			const clock = new THREE.Clock();
 
 			const params = {
 				asset: 'Punching Bag'
@@ -265,9 +265,7 @@
 
 			function animate() {
 
-				timer.update();
-
-				const delta = timer.getDelta();
+				const delta = clock.getDelta();
 
 				if ( mixer ) mixer.update( delta );
 
