@@ -3,7 +3,7 @@
 	<head>
 		<title>three.js webgl - FBX loader</title>
 		<meta charset="utf-8">
-		<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+		<meta name="viewport" content="width=device-width, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no">
 		<link type="text/css" rel="stylesheet" href="main.css">
 	</head>
 
@@ -12,6 +12,21 @@
 			<a href="https://threejs.org" target="_blank" rel="noopener">three.js</a> - FBXLoader<br />
 			Character and animation from <a href="https://www.mixamo.com/" target="_blank" rel="noopener">Mixamo</a>
 		</div>
+
+		<button id="startAudio" style="
+			position:absolute;
+			top:20px;
+			right:20px;
+			z-index:10;
+			padding:10px 16px;
+			border:none;
+			border-radius:8px;
+			background:rgba(0,0,0,0.7);
+			color:white;
+			cursor:pointer;
+		">
+			Activar música
+		</button>
 
 		<script type="importmap">
 			{
@@ -27,20 +42,20 @@
 			import * as THREE from 'three';
 
 			import Stats from 'three/addons/libs/stats.module.js';
-
 			import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 			import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
 			import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
+			import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 
 			const manager = new THREE.LoadingManager();
 
 			let camera, scene, renderer, stats, object, loader, guiMorphsFolder;
 			let mixer;
+			let sound;
 
 			let texture;
 			const textureLoader = new THREE.TextureLoader();
 
-			// Clock mide tiempo entre frames
 			const clock = new THREE.Clock();
 
 			const params = {
@@ -60,7 +75,6 @@
 				'Crouch To Stand'
 			];
 
-
 			init();
 
 			function init() {
@@ -73,7 +87,7 @@
 
 				scene = new THREE.Scene();
 				scene.background = new THREE.Color( 0xa0a0a0 );
-				scene.fog = new THREE.Fog( 0xa0a0a0, 200, 1000 );
+				// scene.fog = new THREE.Fog( 0xa0a0a0, 200, 1000 );
 
 				const hemiLight = new THREE.HemisphereLight( 0xffffff, 0x444444, 5 );
 				hemiLight.position.set( 0, 200, 0 );
@@ -93,10 +107,10 @@
 				topLight.castShadow = true;
 				scene.add( topLight );
 
-				// scene.add( new THREE.CameraHelper( dirLight.shadow.camera ) );
-
-				// ground
-				const mesh = new THREE.Mesh( new THREE.PlaneGeometry( 2000, 2000 ), new THREE.MeshPhongMaterial( { color: 0x999999, depthWrite: false } ) );
+				const mesh = new THREE.Mesh(
+					new THREE.PlaneGeometry( 2000, 2000 ),
+					new THREE.MeshPhongMaterial( { color: 0x999999, depthWrite: false } )
+				);
 				mesh.rotation.x = - Math.PI / 2;
 				mesh.receiveShadow = true;
 				scene.add( mesh );
@@ -109,7 +123,16 @@
 				texture = textureLoader.load( 'models/textures/pintura.jpg' );
 				texture.colorSpace = THREE.SRGBColorSpace;
 				texture.flipY = false;
-			
+
+				const rgbeLoader = new RGBELoader();
+				rgbeLoader.load( 'models/rgbe/blue_hour_8k.hdr', function ( hdrTexture ) {
+
+					hdrTexture.mapping = THREE.EquirectangularReflectionMapping;
+					scene.background = hdrTexture;
+					scene.environment = hdrTexture;
+
+				} );
+
 				loader = new FBXLoader( manager );
 				loadAsset( params.asset );
 
@@ -130,7 +153,6 @@
 				renderer.toneMapping = THREE.ACESFilmicToneMapping;
 				renderer.toneMappingExposure = 1.0;
 
-				// stats
 				stats = new Stats();
 				container.appendChild( stats.dom );
 
@@ -142,6 +164,33 @@
 				} );
 
 				guiMorphsFolder = gui.addFolder( 'Morphs' ).hide();
+
+				const listener = new THREE.AudioListener();
+				camera.add( listener );
+
+				sound = new THREE.Audio( listener );
+
+				const audioLoader = new THREE.AudioLoader();
+				audioLoader.load( 'models/audio/Snow-Informer.mp3', function ( buffer ) {
+
+					sound.setBuffer( buffer );
+					sound.setLoop( true );
+					sound.setVolume( 0.5 );
+
+				} );
+
+				const startAudioButton = document.getElementById( 'startAudio' );
+				startAudioButton.addEventListener( 'click', function () {
+
+					if ( sound && sound.buffer && ! sound.isPlaying ) {
+
+						sound.play();
+
+					}
+
+					startAudioButton.style.display = 'none';
+
+				} );
 
 			}
 
@@ -164,14 +213,13 @@
 								const materials = Array.isArray( child.material ) ? child.material : [ child.material ];
 								materials.forEach( material => {
 
-									// if ( material.map ) material.map.dispose();
 									if ( material.map && material.map !== texture ) material.map.dispose();
 									material.dispose();
-			
+
 								} );
-			
+
 							}
-			
+
 							if ( child.geometry ) child.geometry.dispose();
 
 						} );
@@ -179,8 +227,6 @@
 						scene.remove( object );
 
 					}
-
-					//
 
 					object = group;
 
@@ -224,6 +270,8 @@
 									if ( 'shininess' in material ) material.shininess = 75;
 									if ( 'specular' in material ) material.specular.set( 0x555555 );
 
+									if ( 'envMapIntensity' in material ) material.envMapIntensity = 0.8;
+
 									material.needsUpdate = true;
 
 								} );
@@ -235,11 +283,11 @@
 								guiMorphsFolder.show();
 								const meshFolder = guiMorphsFolder.addFolder( child.name || child.uuid );
 								Object.keys( child.morphTargetDictionary ).forEach( ( key ) => {
-			
+
 									meshFolder.add( child.morphTargetInfluences, child.morphTargetDictionary[ key ], 0, 1, 0.01 );
-			
+
 								} );
-			
+
 							}
 
 						}
@@ -261,8 +309,6 @@
 
 			}
 
-			//
-
 			function animate() {
 
 				const delta = clock.getDelta();
@@ -270,7 +316,6 @@
 				if ( mixer ) mixer.update( delta );
 
 				renderer.render( scene, camera );
-
 				stats.update();
 
 			}
