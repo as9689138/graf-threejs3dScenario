@@ -1,326 +1,362 @@
 <!DOCTYPE html>
 <html lang="en">
-	<head>
-		<title>three.js webgl - FBX loader</title>
-		<meta charset="utf-8">
-		<meta name="viewport" content="width=device-width, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no">
-		<link type="text/css" rel="stylesheet" href="main.css">
-	</head>
+<head>
+	<title>three.js webgl - FBX loader</title>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no">
+	<link type="text/css" rel="stylesheet" href="main.css">
+</head>
 
-	<body>
-		<div id="info">
-			<a href="https://threejs.org" target="_blank" rel="noopener">three.js</a> - FBXLoader<br />
-			Character and animation from <a href="https://www.mixamo.com/" target="_blank" rel="noopener">Mixamo</a>
-		</div>
+<body>
+	<div id="info">
+		<a href="https://threejs.org" target="_blank" rel="noopener">three.js</a> - FBXLoader<br />
+		Character and animation from <a href="https://www.mixamo.com/" target="_blank" rel="noopener">Mixamo</a>
+	</div>
 
-		<button id="startAudio" style="
-			position:absolute;
-			top:20px;
-			right:20px;
-			z-index:10;
-			padding:10px 16px;
-			border:none;
-			border-radius:8px;
-			background:rgba(0,0,0,0.7);
-			color:white;
-			cursor:pointer;
-		">
-			Activar música
-		</button>
+	<button id="startAudio" style="
+		position:absolute;
+		top:20px;
+		right:20px;
+		z-index:10;
+		padding:10px 16px;
+		border:none;
+		border-radius:8px;
+		background:rgba(0,0,0,0.7);
+		color:white;
+		cursor:pointer;
+	">
+		Activar música
+	</button>
 
-		<script type="importmap">
-			{
-				"imports": {
-					"three": "../build/three.module.js",
-					"three/addons/": "./jsm/"
-				}
-			}
-		</script>
+	<script type="importmap">
+	{
+		"imports": {
+			"three": "../build/three.module.js",
+			"three/addons/": "./jsm/"
+		}
+	}
+	</script>
 
-		<script type="module">
+	<script type="module">
+		import * as THREE from 'three';
 
-			import * as THREE from 'three';
+		import Stats from 'three/addons/libs/stats.module.js';
+		import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+		import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
+		import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
+		import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 
-			import Stats from 'three/addons/libs/stats.module.js';
-			import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-			import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
-			import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
-			import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
+		const manager = new THREE.LoadingManager();
 
-			const manager = new THREE.LoadingManager();
+		let camera, scene, renderer, stats, object, loader, guiMorphsFolder;
+		let mixer;
+		let sound;
 
-			let camera, scene, renderer, stats, object, loader, guiMorphsFolder;
-			let mixer;
-			let sound;
+		let avatarTexture;
+		let floorTexture;
 
-			let texture;
-			const textureLoader = new THREE.TextureLoader();
+		const textureLoader = new THREE.TextureLoader();
+		const clock = new THREE.Clock();
 
-			const clock = new THREE.Clock();
+		const params = {
+			asset: 'Punching Bag'
+		};
 
-			const params = {
-				asset: 'Punching Bag'
-			};
+		const assets = [
+			'Samba Dancing',
+			'morph_test',
+			'monkey',
+			'monkey_embedded_texture',
+			'vCube',
+			'Swing Dancing',
+			'Running',
+			'Receive Uppercut To The Face',
+			'Punching Bag',
+			'Crouch To Stand'
+		];
 
-			const assets = [
-				'Samba Dancing',
-				'morph_test',
-				'monkey',
-				'monkey_embedded_texture',
-				'vCube',
-				'Swing Dancing',
-				'Running',
-				'Receive Uppercut To The Face',
-				'Punching Bag',
-				'Crouch To Stand'
-			];
+		init();
 
-			init();
+		function init() {
 
-			function init() {
+			const container = document.createElement('div');
+			document.body.appendChild(container);
 
-				const container = document.createElement( 'div' );
-				document.body.appendChild( container );
+			camera = new THREE.PerspectiveCamera(
+				55,
+				window.innerWidth / window.innerHeight,
+				1,
+				2000
+			);
+			camera.position.set(0, 80, 350);
 
-				camera = new THREE.PerspectiveCamera( 45, window.innerWidth / window.innerHeight, 1, 2000 );
-				camera.position.set( 100, 200, 300 );
+			scene = new THREE.Scene();
+			scene.background = new THREE.Color(0xa0a0a0);
 
-				scene = new THREE.Scene();
-				scene.background = new THREE.Color( 0xa0a0a0 );
-				// scene.fog = new THREE.Fog( 0xa0a0a0, 200, 1000 );
+			const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 2.0);
+			hemiLight.position.set(0, 200, 0);
+			scene.add(hemiLight);
 
-				const hemiLight = new THREE.HemisphereLight( 0xffffff, 0x444444, 5 );
-				hemiLight.position.set( 0, 200, 0 );
-				scene.add( hemiLight );
+			const dirLight = new THREE.DirectionalLight(0xffffff, 2.5);
+			dirLight.position.set(0, 200, 100);
+			dirLight.castShadow = true;
+			dirLight.shadow.camera.top = 180;
+			dirLight.shadow.camera.bottom = -100;
+			dirLight.shadow.camera.left = -120;
+			dirLight.shadow.camera.right = 120;
+			scene.add(dirLight);
 
-				const dirLight = new THREE.DirectionalLight( 0xffffff, 5 );
-				dirLight.position.set( 0, 200, 100 );
-				dirLight.castShadow = true;
-				dirLight.shadow.camera.top = 180;
-				dirLight.shadow.camera.bottom = - 100;
-				dirLight.shadow.camera.left = - 120;
-				dirLight.shadow.camera.right = 120;
-				scene.add( dirLight );
+			const topLight = new THREE.DirectionalLight(0xffffff, 1.2);
+			topLight.position.set(0, 300, 0);
+			topLight.castShadow = true;
+			scene.add(topLight);
 
-				const topLight = new THREE.DirectionalLight( 0xffffff, 2.5 );
-				topLight.position.set( 0, 300, 0 );
-				topLight.castShadow = true;
-				scene.add( topLight );
+			avatarTexture = textureLoader.load(
+				'models/textures/pintura.jpg',
+				() => console.log('✅ Textura del avatar cargada'),
+				undefined,
+				(error) => console.error('❌ Error cargando textura del avatar:', error)
+			);
+			avatarTexture.colorSpace = THREE.SRGBColorSpace;
+			avatarTexture.flipY = false;
 
-				const mesh = new THREE.Mesh(
-					new THREE.PlaneGeometry( 2000, 2000 ),
-					new THREE.MeshPhongMaterial( { color: 0x999999, depthWrite: false } )
-				);
-				mesh.rotation.x = - Math.PI / 2;
-				mesh.receiveShadow = true;
-				scene.add( mesh );
+			floorTexture = textureLoader.load(
+				'models/textures/tapeteTexture.jpg',
+				() => console.log('✅ Textura del piso cargada'),
+				undefined,
+				(error) => console.error('❌ Error cargando textura del piso:', error)
+			);
+			floorTexture.colorSpace = THREE.SRGBColorSpace;
+			floorTexture.wrapS = THREE.RepeatWrapping;
+			floorTexture.wrapT = THREE.RepeatWrapping;
+			floorTexture.repeat.set(6, 6);
 
-				const grid = new THREE.GridHelper( 2000, 20, 0x000000, 0x000000 );
-				grid.material.opacity = 0.2;
-				grid.material.transparent = true;
-				scene.add( grid );
+			const floorMaterial = new THREE.MeshStandardMaterial({
+				map: floorTexture,
+				color: 0xffffff,
+				roughness: 0.45,
+				metalness: 0.6,
+				envMapIntensity: 1.0
+			});
 
-				texture = textureLoader.load( 'models/textures/pintura.jpg' );
-				texture.colorSpace = THREE.SRGBColorSpace;
-				texture.flipY = false;
+			const floor = new THREE.Mesh(
+				new THREE.PlaneGeometry(450, 450),
+				floorMaterial
+			);
+			floor.rotation.x = -Math.PI / 2;
+			floor.position.y = 0;
+			floor.receiveShadow = true;
+			scene.add(floor);
 
-				const rgbeLoader = new RGBELoader();
-				rgbeLoader.load( 'models/rgbe/blue_hour_8k.hdr', function ( hdrTexture ) {
+			renderer = new THREE.WebGLRenderer({ antialias: true });
+			renderer.setPixelRatio(window.devicePixelRatio);
+			renderer.setSize(window.innerWidth, window.innerHeight);
+			renderer.setAnimationLoop(animate);
+			renderer.shadowMap.enabled = true;
+			renderer.outputColorSpace = THREE.SRGBColorSpace;
+			renderer.toneMapping = THREE.ACESFilmicToneMapping;
+			renderer.toneMappingExposure = 1.1;
+			container.appendChild(renderer.domElement);
 
+			const rgbeLoader = new RGBELoader();
+			rgbeLoader.load(
+				'models/rgbe/basement_boxing_ring_8k.hdr',
+				function (hdrTexture) {
 					hdrTexture.mapping = THREE.EquirectangularReflectionMapping;
 					scene.background = hdrTexture;
 					scene.environment = hdrTexture;
 
-				} );
+					scene.backgroundRotation.y = Math.PI / 2;
+				},
+				undefined,
+				function (error) {
+					console.error('❌ Error cargando HDR:', error);
+				}
+			);
 
-				loader = new FBXLoader( manager );
-				loadAsset( params.asset );
+			const controls = new OrbitControls(camera, renderer.domElement);
+			controls.target.set(0, 40, 0);
+			controls.update();
 
-				renderer = new THREE.WebGLRenderer( { antialias: true } );
-				renderer.setPixelRatio( window.devicePixelRatio );
-				renderer.setSize( window.innerWidth, window.innerHeight );
-				renderer.setAnimationLoop( animate );
-				renderer.shadowMap.enabled = true;
-				container.appendChild( renderer.domElement );
+			window.addEventListener('resize', onWindowResize);
 
-				const controls = new OrbitControls( camera, renderer.domElement );
-				controls.target.set( 0, 100, 0 );
-				controls.update();
+			stats = new Stats();
+			container.appendChild(stats.dom);
 
-				window.addEventListener( 'resize', onWindowResize );
+			const gui = new GUI();
+			gui.add(params, 'asset', assets).onChange(function (value) {
+				loadAsset(value);
+			});
 
-				renderer.outputColorSpace = THREE.SRGBColorSpace;
-				renderer.toneMapping = THREE.ACESFilmicToneMapping;
-				renderer.toneMappingExposure = 1.0;
+			guiMorphsFolder = gui.addFolder('Morphs');
+			guiMorphsFolder.hide();
 
-				stats = new Stats();
-				container.appendChild( stats.dom );
+			loader = new FBXLoader(manager);
+			loadAsset(params.asset);
 
-				const gui = new GUI();
-				gui.add( params, 'asset', assets ).onChange( function ( value ) {
+			const listener = new THREE.AudioListener();
+			camera.add(listener);
 
-					loadAsset( value );
+			sound = new THREE.Audio(listener);
 
-				} );
+			const audioLoader = new THREE.AudioLoader();
+			audioLoader.load(
+				'models/audio/EyeOfTheTiger.mp3',
+				function (buffer) {
+					sound.setBuffer(buffer);
+					sound.setLoop(true);
+					sound.setVolume(0.5);
+				},
+				undefined,
+				function (error) {
+					console.error('❌ Error cargando audio:', error);
+				}
+			);
 
-				guiMorphsFolder = gui.addFolder( 'Morphs' ).hide();
+			const startAudioButton = document.getElementById('startAudio');
+			startAudioButton.addEventListener('click', function () {
+				if (sound && sound.buffer && !sound.isPlaying) {
+					sound.play();
+				}
+				startAudioButton.style.display = 'none';
+			});
 
-				const listener = new THREE.AudioListener();
-				camera.add( listener );
+		}
 
-				sound = new THREE.Audio( listener );
+		function loadAsset(asset) {
 
-				const audioLoader = new THREE.AudioLoader();
-				audioLoader.load( 'models/audio/Snow-Informer.mp3', function ( buffer ) {
+			loader.load(
+				'models/fbx/' + asset + '.fbx',
+				function (group) {
 
-					sound.setBuffer( buffer );
-					sound.setLoop( true );
-					sound.setVolume( 0.5 );
+					if (object) {
 
-				} );
+						object.traverse(function (child) {
 
-				const startAudioButton = document.getElementById( 'startAudio' );
-				startAudioButton.addEventListener( 'click', function () {
-
-					if ( sound && sound.buffer && ! sound.isPlaying ) {
-
-						sound.play();
-
-					}
-
-					startAudioButton.style.display = 'none';
-
-				} );
-
-			}
-
-			function loadAsset( asset ) {
-
-				loader.load( 'models/fbx/' + asset + '.fbx', function ( group ) {
-
-					if ( object ) {
-
-						object.traverse( function ( child ) {
-
-							if ( child.isSkinnedMesh ) {
-
+							if (child.isSkinnedMesh && child.skeleton) {
 								child.skeleton.dispose();
-
 							}
 
-							if ( child.material ) {
+							if (child.material) {
+								const materials = Array.isArray(child.material)
+									? child.material
+									: [child.material];
 
-								const materials = Array.isArray( child.material ) ? child.material : [ child.material ];
-								materials.forEach( material => {
-
-									if ( material.map && material.map !== texture ) material.map.dispose();
+								materials.forEach(material => {
+									if (material.map && material.map !== avatarTexture) {
+										material.map.dispose();
+									}
 									material.dispose();
-
-								} );
-
+								});
 							}
 
-							if ( child.geometry ) child.geometry.dispose();
+							if (child.geometry) child.geometry.dispose();
 
-						} );
+						});
 
-						scene.remove( object );
+						scene.remove(object);
 
 					}
 
 					object = group;
 
-					if ( object.animations && object.animations.length ) {
-
-						mixer = new THREE.AnimationMixer( object );
-
-						const action = mixer.clipAction( object.animations[ 0 ] );
+					if (object.animations && object.animations.length) {
+						mixer = new THREE.AnimationMixer(object);
+						const action = mixer.clipAction(object.animations[0]);
 						action.play();
-
 					} else {
-
 						mixer = null;
-
 					}
 
-					guiMorphsFolder.children.forEach( ( child ) => child.destroy() );
-					guiMorphsFolder.hide();
+					if (guiMorphsFolder) {
+						guiMorphsFolder.children.forEach((child) => child.destroy());
+						guiMorphsFolder.hide();
+					}
 
-					object.traverse( function ( child ) {
+					object.traverse(function (child) {
 
-						if ( child.isMesh ) {
+						if (child.isMesh) {
 
 							child.castShadow = true;
 							child.receiveShadow = true;
 
-							if ( child.material ) {
+							if (child.material) {
 
-								const materials = Array.isArray( child.material ) ? child.material : [ child.material ];
+								const materials = Array.isArray(child.material)
+									? child.material
+									: [child.material];
 
-								materials.forEach( ( material ) => {
+								materials.forEach((material) => {
 
-									material.map = texture;
+									material.map = avatarTexture;
 									material.transparent = false;
 									material.opacity = 1;
-									material.color.set( 0xffffff );
+									material.color.set(0xffffff);
 
-									if ( 'roughness' in material ) material.roughness = 0.35;
-									if ( 'metalness' in material ) material.metalness = 0.22;
-
-									if ( 'shininess' in material ) material.shininess = 75;
-									if ( 'specular' in material ) material.specular.set( 0x555555 );
-
-									if ( 'envMapIntensity' in material ) material.envMapIntensity = 0.8;
+									if ('roughness' in material) material.roughness = 0.22;
+									if ('metalness' in material) material.metalness = 0.28;
+									if ('shininess' in material) material.shininess = 75;
+									if ('specular' in material) material.specular.set(0x555555);
+									if ('envMapIntensity' in material) material.envMapIntensity = 1.15;
 
 									material.needsUpdate = true;
 
-								} );
+								});
 
 							}
 
-							if ( child.morphTargetDictionary ) {
+							if (child.morphTargetDictionary && guiMorphsFolder) {
 
 								guiMorphsFolder.show();
-								const meshFolder = guiMorphsFolder.addFolder( child.name || child.uuid );
-								Object.keys( child.morphTargetDictionary ).forEach( ( key ) => {
+								const meshFolder = guiMorphsFolder.addFolder(child.name || child.uuid);
 
-									meshFolder.add( child.morphTargetInfluences, child.morphTargetDictionary[ key ], 0, 1, 0.01 );
-
-								} );
+								Object.keys(child.morphTargetDictionary).forEach((key) => {
+									meshFolder.add(
+										child.morphTargetInfluences,
+										child.morphTargetDictionary[key],
+										0,
+										1,
+										0.01
+									);
+								});
 
 							}
 
 						}
 
-					} );
+					});
 
-					scene.add( object );
+					object.position.set(0, 0, 0);
+					scene.add(object);
 
-				} );
+				},
+				undefined,
+				function (error) {
+					console.error('❌ Error cargando FBX:', error);
+				}
+			);
 
-			}
+		}
 
-			function onWindowResize() {
+		function onWindowResize() {
 
-				camera.aspect = window.innerWidth / window.innerHeight;
-				camera.updateProjectionMatrix();
+			camera.aspect = window.innerWidth / window.innerHeight;
+			camera.updateProjectionMatrix();
+			renderer.setSize(window.innerWidth, window.innerHeight);
 
-				renderer.setSize( window.innerWidth, window.innerHeight );
+		}
 
-			}
+		function animate() {
 
-			function animate() {
+			const delta = clock.getDelta();
 
-				const delta = clock.getDelta();
+			if (mixer) mixer.update(delta);
 
-				if ( mixer ) mixer.update( delta );
+			renderer.render(scene, camera);
 
-				renderer.render( scene, camera );
-				stats.update();
+			if (stats) stats.update();
 
-			}
-
-		</script>
-
-	</body>
+		}
+	</script>
+</body>
 </html>
